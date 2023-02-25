@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
-	"github.com/redis/go-redis/v9"
+	redis "github.com/redis/go-redis/v9"
 )
 
 func Conn(addr, pass string, db int) *redis.Client {
@@ -21,12 +22,19 @@ func Conn(addr, pass string, db int) *redis.Client {
 func main() {
 	ctx := context.Background()
 
-	rd := Conn("localhost:6379", "", 0)
+	rd := Conn("localhost:6378", "admin", 0)
 
-	err := rd.Set(ctx, "example-redis", "Hello Redis", 0).Err()
+	timeout := time.Duration(100) * time.Millisecond
+
+	err := rd.Set(ctx, "example-redis", "Hello Redis", timeout).Err()
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	// err = rd.Append(ctx, "example-redis-01", "redis is beautiful").Err()
+	// if err != nil {
+	// 	log.Fatalln(err)
+	// }
 
 	value, err := rd.Get(ctx, "example-redis").Result()
 	if err != nil {
