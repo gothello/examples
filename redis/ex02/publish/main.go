@@ -7,14 +7,15 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
 type Client struct {
-	ID       string `json:"id"`
-	Username string `json:"user"`
-	Pass     string `json:"pass"`
+	ID       string `json:"id" redis:"id"`
+	Username string `json:"user" redis:"user"`
+	Pass     string `json:"pass" redis:"pass"`
 }
 
 func (c *Client) Parser() ([]byte, error) {
@@ -103,8 +104,18 @@ func (rds *RedisCache) Handler1(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	spew.Dump(c)
+
+	j, err := json.Marshal(c)
+	if err != nil {
+		fmt.Println("error:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, http.StatusText(http.StatusInternalServerError))
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "client created : %s\n", c.ID)
+	w.Write(j)
 }
 
 func (rds *RedisPubSub) Handler(w http.ResponseWriter, r *http.Request) {
