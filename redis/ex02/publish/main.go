@@ -31,6 +31,22 @@ type RedisPubSub struct {
 	channel string
 }
 
+type RedisCache struct {
+	conn *redis.Client
+}
+
+func NewRedisCache(addr, pass string, db int) *RedisCache {
+	r := redis.NewClient(&redis.Options{
+		Addr:     addr,
+		Password: pass,
+		DB:       db,
+	})
+
+	return &RedisCache{
+		conn: r,
+	}
+}
+
 func NewConnection(addr, pass string, db int, ch string) *RedisPubSub {
 	r := redis.NewClient(&redis.Options{
 		Addr:     addr,
@@ -42,6 +58,53 @@ func NewConnection(addr, pass string, db int, ch string) *RedisPubSub {
 		conn:    r,
 		channel: ch,
 	}
+}
+
+func (rds *RedisCache) Handler1(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		fmt.Fprint(w, http.StatusText(http.StatusMethodNotAllowed))
+		return
+	}
+
+	var client Client
+	if err := json.NewDecoder(r.Body).Decode(&client); err != nil {
+		w.WriteHeader(http.StatusFailedDependency)
+		fmt.Fprintf(w, http.StatusText(http.StatusFailedDependency))
+		return
+	}
+
+	client.ID = uuid.NewString()
+	ctx := context.Background()
+
+	_, err := rds.conn.Pipelined(
+		ctx,
+		func(rdb redis.Pipeliner) error {
+			rdb.HSet(ctx, client.ID, "id", client.ID)
+			rdb.HSet(ctx, client.ID, "user", client.Username)
+			rdb.HSet(ctx, client.ID, "pass", client.Pass)
+			return nil
+		},
+	)
+
+	if err != nil {
+		fmt.Println("error:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, http.StatusText(http.StatusInternalServerError))
+		return
+	}
+
+	var c Client
+
+	if err := rds.conn.HGetAll(ctx, client.ID).Scan(&c); err != nil {
+		fmt.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, http.StatusText(http.StatusInternalServerError))
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "client created : %s\n", c.ID)
 }
 
 func (rds *RedisPubSub) Handler(w http.ResponseWriter, r *http.Request) {
@@ -87,11 +150,14 @@ func (rds *RedisPubSub) Handler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	rb := NewConnection("localhost:6378", "admin", 0, "MY-CLIENT")
+	rbs := NewRedisCache("localhost:6378", "admin", 0)
+
 	if err := rb.conn.Ping(context.Background()).Err(); err != nil {
 		log.Fatalln(err)
 	}
 
 	http.HandleFunc("/", rb.Handler)
+	http.HandleFunc("/one", rbs.Handler1)
 
 	fmt.Println("Server on 3000")
 	if err := http.ListenAndServe(":3000", nil); err != nil {
