@@ -1,0 +1,21 @@
+version: '3.9'
+
+services:
+  one:
+    build: ./server-one
+    ports:
+      - "7000:3000"
+  two:
+    build: ./server-two
+    ports:
+      - "8000:3000"
+  three:
+    build: ./server-three
+    ports:
+      - "9000:3000"
+  nginx:
+    image: nginx
+    ports:
+      - "3000:80"
+    volumes:
+     - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro

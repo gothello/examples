@@ -9,6 +9,26 @@ import (
 	"time"
 )
 
+func StartConnection() net.Conn {
+
+	var (
+		conn net.Conn
+		err  error
+	)
+	for {
+		conn, err = net.Dial("tcp", ":8080")
+		if err == nil {
+			fmt.Println("connected")
+			break
+		}
+
+		fmt.Println("connecting.................")
+		time.Sleep(time.Second)
+	}
+
+	return conn
+}
+
 func ReadStdout(input chan string) {
 	for {
 		reader := bufio.NewReader(os.Stdout)
@@ -19,56 +39,50 @@ func ReadStdout(input chan string) {
 		}
 
 		if d != "" {
-			go WriteConn(input)
+			input <- d
 		}
 
 	}
 }
 
-func WriteConn(out chan string) {
+func ReadInputServer(conn net.Conn, out chan string) {
 
-	var (
-		conn net.Conn
-		err  error
-	)
-
+	body := make([]byte, 1024)
 	for {
-		conn, err = net.Dial("tcp", ":8080")
+		b, err := conn.Read(body)
 		if err != nil {
-			fmt.Println("reconnection")
-			time.Sleep(time.Second)
-			continue
+			log.Println(err)
+			return
 		}
 
-		fmt.Println("status: connected")
-
-		break
+		out <- string(body[:b])
 	}
-
-	for {
-		select {
-		case b := <-out:
-			_, err = conn.Write([]byte(b))
-
-			if err != nil {
-				log.Println(err)
-			}
-		default:
-		}
-	}
-
 }
 
 func main() {
 
-	// conn, err := net.Dial("tcp", ":8080")
-	// if err != nil {
-	// 	log.Fatalln(err)
-	// }
-
 	input := make(chan string)
+	output := make(chan string)
 
-	go ReadStdout(input)
+START:
+	for {
+		conn := StartConnection()
 
-	<-make(chan bool)
+		go ReadStdout(input)
+		go ReadInputServer(conn, output)
+
+		for {
+			select {
+			case i := <-input:
+				_, err := conn.Write([]byte(i))
+				if err != nil {
+					log.Println(err)
+					conn.Close()
+					continue START
+				}
+			case o := <-output:
+				fmt.Printf("Received message: %s", o)
+			}
+		}
+	}
 }

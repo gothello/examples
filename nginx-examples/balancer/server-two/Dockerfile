@@ -1,12 +1,11 @@
 FROM golang:latest
 
+
 WORKDIR /app
 
 COPY . .
 
-EXPOSE 3000
-RUN go mod init test
-
+RUN go mod init balancer
 
 RUN go build -o app
 

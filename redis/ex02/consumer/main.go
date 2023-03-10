@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/redis/go-redis/v9"
+	redis "github.com/redis/go-redis/v9"
 )
 
 type InputRedis struct {
@@ -27,6 +27,7 @@ func NewConn(addr, pass string, db int) *redis.Client {
 
 func main() {
 	r := NewConn("localhost:6378", "admin", 0)
+	defer r.Close()
 
 	sub := r.Subscribe(context.Background(), "MY-CLIENT")
 
